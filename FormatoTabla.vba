@@ -1,139 +1,121 @@
-
 Sub FormatoTabla()
-    ' Seleccionar la hoja "Ventas"
-    Dim ws As Worksheet
-    Set ws = ThisWorkbook.Sheets("Ventas")
-    ws.Activate
+    '-------------------------------------------------------
+    '   MACRO: FormatoTabla()
+    '   AUTOR: 
+    '   OBJETIVO: Formatear la hoja "Ventas" según PREGUNTA 1
+    '-------------------------------------------------------
 
-    ' Declarar variables para el rango y la última fila
+    Dim ws As Worksheet
     Dim lastRow As Long
     Dim dataRange As Range
     Dim headerRange As Range
+    Dim colZona As Long, colFechaEnvio As Long
+    Dim colPorcDesc As Long, colUnidades As Long
+    Dim summaryRowStart As Long
+    Dim unidadesDataRange As Range
+    Dim formula As String
+    Dim sep As String
     
-    ' Encontrar la última fila con datos en la columna A (asumiendo que ID_Pedido es la columna original A)
-    lastRow = ws.Cells(ws.Rows.Count, "H").End(xlUp).Row
+    '--- Inicializar hoja ---
+    Set ws = ThisWorkbook.Sheets("Ventas")
+    ws.Activate
+    sep = Application.International(xlListSeparator)
     
-    ' --- 1. Insertar nuevas columnas ---
-    ' Insertar columna para Id_Cliente en la posición A
-    ws.Columns("A").Insert Shift:=xlToRight, CopyOrigin:=xlFormatFromLeftOrAbove
-    ws.Range("A1").Value = "Id_Cliente"
+    '--- Identificar posiciones dinámicamente ---
+    colZona = ws.Rows(1).Find("Zona", , xlValues, xlWhole).Column
+    colFechaEnvio = ws.Rows(1).Find("Fecha envío", , xlValues, xlWhole).Column
+    colUnidades = ws.Rows(1).Find("Unidades", , xlValues, xlWhole).Column
     
-    ' Insertar columna para Porc descuento en la posición J
-    ws.Columns("J").Insert Shift:=xlToRight, CopyOrigin:=xlFormatFromLeftOrAbove
-    ws.Range("J1").Value = "Porc descuento"
+    '--- Insertar columnas nuevas ---
+    ws.Columns(colZona).Insert Shift:=xlToRight
+    ws.Cells(1, colZona).Value = "Id_Cliente"
     
-    ' --- 2. Formato de encabezado ---
-    Set headerRange = ws.Range("A1:P1") ' Ajustado al nuevo número de columnas
+    ws.Columns(colFechaEnvio + 1).Insert Shift:=xlToRight
+    ws.Cells(1, colFechaEnvio + 1).Value = "Porc descuento"
+    colPorcDesc = colFechaEnvio + 1
+    
+    '--- Formato encabezado ---
+    Set headerRange = ws.Range(ws.Cells(1, 1), ws.Cells(1, ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column))
     With headerRange
         .Font.Bold = True
         .Font.Color = vbWhite
-        .Interior.Color = vbGreen
+        .Interior.Color = RGB(0, 176, 80) ' verde
         .HorizontalAlignment = xlCenter
         .VerticalAlignment = xlCenter
     End With
     
-    ' --- 3. Autoajustar columnas y agregar bordes ---
-    ws.Columns.AutoFit
-    
-    ' Actualizar la última fila y el rango de datos
-    lastRow = ws.Cells(ws.Rows.Count, "H").End(xlUp).Row
-    Set dataRange = ws.Range("A1:P" & lastRow)
-    
+    '--- Bordes y ajuste ---
+    lastRow = ws.Cells(ws.Rows.Count, colUnidades).End(xlUp).Row
+    Set dataRange = ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, headerRange.Columns.Count))
     With dataRange.Borders
         .LineStyle = xlContinuous
         .Weight = xlThin
     End With
+    ws.Columns.AutoFit
     
-    ' --- 4. Formato de columnas específicas ---
-    ' Formato para Porc descuento (Columna J)
-    ws.Columns("J").NumberFormat = "0.0"
+    '--- Formatos numéricos ---
+    ws.Columns(colPorcDesc).NumberFormat = "0.0"
+    Dim colInicioMoneda As Long
+    colInicioMoneda = ws.Rows(1).Find("Precio unitario", , xlValues, xlWhole).Column
+    ws.Range(ws.Cells(2, colInicioMoneda), ws.Cells(lastRow, colInicioMoneda + 4)).NumberFormat = "#,##0.00"
     
-    ' Formato para columnas de moneda (L a P)
-    ws.Range("L:P").NumberFormat = "#,##0.00 €"
-
-    ' --- 5. Agregar filas de resumen (Máximo, Mínimo, Promedio) ---
-    Dim summaryRowStart As Long
-    summaryRowStart = lastRow + 2 ' Dejar una fila en blanco
-
-    ' Rótulos
+    '--- Agregar filas resumen ---
+    summaryRowStart = lastRow + 2
     ws.Range("J" & summaryRowStart).Value = "Máximo"
     ws.Range("J" & summaryRowStart + 1).Value = "Mínimo"
     ws.Range("J" & summaryRowStart + 2).Value = "Promedio"
-    
-    ' Formato para los rótulos
     With ws.Range("J" & summaryRowStart & ":J" & summaryRowStart + 2)
         .Font.Bold = True
         .Font.Color = vbWhite
-        .Interior.Color = vbGreen
+        .Interior.Color = RGB(0, 176, 80)
         .HorizontalAlignment = xlCenter
     End With
+    ws.Cells(summaryRowStart, colUnidades).Formula = "=MAX(K2:K" & lastRow & ")"
+    ws.Cells(summaryRowStart + 1, colUnidades).Formula = "=MIN(K2:K" & lastRow & ")"
+    ws.Cells(summaryRowStart + 2, colUnidades).Formula = "=PROMEDIO(K2:K" & lastRow & ")"
     
-    ' Fórmulas para la columna Unidades (K)
-    Dim unidadesRange As String
-    unidadesRange = "K2:K" & lastRow
-    ws.Range("K" & summaryRowStart).Formula = "=MAX(" & unidadesRange & ")"
-    ws.Range("K" & summaryRowStart + 1).Formula = "=MIN(" & unidadesRange & ")"
-    ws.Range("K" & summaryRowStart + 2).Formula = "=AVERAGE(" & unidadesRange & ")"
-
-    ' --- 6. Formato Condicional para la columna Unidades (K) ---
-    Dim unidadesDataRange As Range
-    Set unidadesDataRange = ws.Range("K2:K" & lastRow)
-    
-    ' Limpiar formatos condicionales existentes
+    '--- Formato condicional (excluye filas resumen) ---
+    Set unidadesDataRange = ws.Range("K2:K" & summaryRowStart - 2)
     unidadesDataRange.FormatConditions.Delete
     
-    ' Regla 1: Prioridad "Crítica" y Unidades > 6000 (Debe ir primero por precedencia)
-    Dim condition1 As FormatCondition
-    Set condition1 = unidadesDataRange.FormatConditions.Add(Type:=xlExpression, Formula1:="=Y($K2>6000; $F2=""Crítica"")")
-    With condition1
+    ' 1) Crítica + >6000
+    formula = "=Y($K2>6000" & sep & "$F2=""Crítica"")"
+    Dim c1 As FormatCondition
+    Set c1 = unidadesDataRange.FormatConditions.Add(Type:=xlExpression, Formula1:=formula)
+    With c1
         .StopIfTrue = True
-        With .Interior
-            .PatternColorIndex = xlAutomatic
-            .Color = vbRed
-        End With
-        With .Font
-            .Color = vbWhite
-            .Bold = True
-        End With
+        .Interior.Color = vbRed
+        .Font.Color = vbWhite
+        .Font.Bold = True
     End With
     
-    ' Regla 2: Unidades > 6000
-    Dim condition2 As FormatCondition
-    Set condition2 = unidadesDataRange.FormatConditions.Add(Type:=xlCellValue, Operator:=xlGreater, Formula1:="=6000")
-    With condition2.Interior
-        .PatternColorIndex = xlAutomatic
-        .Color = vbGreen
-    End With
-    With condition2.Font
-        .Color = vbWhite
-        .Italic = True
+    ' 2) >6000
+    Dim c2 As FormatCondition
+    Set c2 = unidadesDataRange.FormatConditions.Add(Type:=xlCellValue, Operator:=xlGreater, Formula1:="6000")
+    With c2
+        .Interior.Color = vbGreen
+        .Font.Color = vbWhite
+        .Font.Italic = True
     End With
     
-    ' Regla 3: Unidades >= 2500 (y <= 6000)
-    Dim condition3 As FormatCondition
-    Set condition3 = unidadesDataRange.FormatConditions.Add(Type:=xlCellValue, Operator:=xlGreaterEqual, Formula1:="=2500")
-    With condition3.Interior
-        .PatternColorIndex = xlAutomatic
-        .Color = vbBlue
-    End With
-    With condition3.Font
-        .Color = vbWhite
-        .Bold = True
-    End With
-
-    ' Regla 4: Unidades < 2500
-    Dim condition4 As FormatCondition
-    Set condition4 = unidadesDataRange.FormatConditions.Add(Type:=xlCellValue, Operator:=xlLess, Formula1:="=2500")
-    With condition4.Interior
-        .PatternColorIndex = xlAutomatic
-        .Color = vbYellow
-    End With
-    With condition4.Font
-        .Color = vbBlack
-        .Bold = True
+    ' 3) Entre 2500 y 6000
+    Dim c3 As FormatCondition
+    Set c3 = unidadesDataRange.FormatConditions.Add(Type:=xlExpression, Formula1:="=Y($K2>=2500" & sep & "$K2<=6000)")
+    With c3
+        .Interior.Color = vbBlue
+        .Font.Color = vbWhite
+        .Font.Bold = True
     End With
     
-    ' Mensaje de finalización
-    MsgBox "La macro 'FormatoTabla' se ha ejecutado correctamente.", vbInformation
+    ' 4) <2500
+    Dim c4 As FormatCondition
+    Set c4 = unidadesDataRange.FormatConditions.Add(Type:=xlCellValue, Operator:=xlLess, Formula1:="2500")
+    With c4
+        .Interior.Color = vbYellow
+        .Font.Color = vbBlack
+        .Font.Bold = True
+    End With
+    
+    MsgBox "✅ La macro 'FormatoTabla' se ejecutó correctamente.", vbInformation
 
 End Sub
